@@ -9,7 +9,7 @@ setup(
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     packages=find_packages(),
-    url='https://github.com/your_username/dem_project', # Add your project's GitHub URL
+    url='https://github.com/Jyotirmoy17/dem-model',
     install_requires=[
         'scikit-learn',
         'xgboost',

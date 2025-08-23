@@ -1,29 +1,69 @@
-#Scrpit to test this
+# A Test file to demonstrate how to run this
 
-import numpy as np
-from dem import DEM
-from sklearn.model_selection import train_test_split
+import unittest
+import os
+import subprocess
+import pandas as pd
+import requests
+import time
+from threading import Thread
 
-# --- 1. Data Preparation ---
-feature_names = [f'feature_{i}' for i in range(5)]
-X = np.random.rand(200, 5) * 10
-y = 5 * X[:, 0] + np.cos(X[:, 1] * 2) + np.random.randn(200)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+TEST_DATA_PATH = 'test_data.csv'
+MODEL_PATH = 'dem_model.pkl'
+API_URL = "http://127.0.0.1:5000/predict"
 
-# --- 2. Model Training ---
-model = DEM(ridge_alpha=0.5, dt_max_depth=3)
-model.fit(X_train, y_train)
+class TestDemWorkflow(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        print("Setting up test environment...")
+        data = {
+            'feature1': [1, 2, 3, 4, 5],
+            'feature2': [2, 3, 4, 5, 6],
+            'target': [3, 5, 7, 9, 11]
+        }
+        df = pd.DataFrame(data)
+        df.to_csv(TEST_DATA_PATH, index=False)
 
-# --- 3. Making Predictions ---
-final_predictions = model.predict(X_test)
-print(f"Final predictions (first 5): {final_predictions[:5]}")
+    @classmethod
+    def tearDownClass(cls):
+        print("\nTearing down test environment...")
+        if os.path.exists(TEST_DATA_PATH):
+            os.remove(TEST_DATA_PATH)
+        if os.path.exists(MODEL_PATH):
+            os.remove(MODEL_PATH)
 
-# --- 4. Inspecting the Model ---
-decomposed_preds = model.predict_decomposed(X_test)
-print("\n--- Decomposed Prediction for the first data point ---")
-print(f"Baseline (Linear) Prediction: {decomposed_preds['baseline_prediction'][0]:.2f}")
-print(f"Explanation (Tree) Adjustment: {decomposed_preds['explanation_adjustment'][0]:.2f}")
-print(f"Final Combined Prediction: {decomposed_preds['final_prediction'][0]:.2f}")
+    def test_1_model_training(self):
+        print("\n--- Testing train.py ---")
+        command = [
+            "python", "train.py",
+            "--data", TEST_DATA_PATH,
+            "--target", "target"
+        ]
+        result = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, f"Training script failed with error:\n{result.stderr}")
+        self.assertTrue(os.path.exists(MODEL_PATH), "train.py did not create the model file.")
+        print("train.py ran successfully and created dem_model.pkl")
 
-# --- 5. VISUALIZATION ---
-model.visualize_explanation_tree(feature_names=feature_names, save_path="explanation_tree.png")
+    def test_2_api_prediction(self):
+        print("\n--- Testing app.py API ---")
+        if not os.path.exists(MODEL_PATH):
+            self.skipTest("Skipping API test because model file does not exist.")
+
+        from app import app
+        server_thread = Thread(target=app.run, kwargs={'port': 5000})
+        server_thread.daemon = True
+        server_thread.start()
+        time.sleep(2)
+
+        sample_features = {'feature1': 2.5, 'feature2': 3.5}
+        response = requests.post(API_URL, json=sample_features)
+        
+        self.assertEqual(response.status_code, 200)
+        response_data = response.json()
+        self.assertIn('final_prediction', response_data)
+        self.assertIsInstance(response_data['final_prediction'], list)
+        
+        print("app.py started and served a valid prediction.")
+
+if __name__ == '__main__':
+    unittest.main()

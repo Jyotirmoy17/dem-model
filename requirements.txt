@@ -1,0 +1,10 @@
+# requirements.txt
+flask
+google-generativeai
+requests
+joblib
+pandas
+scikit-learn
+xgboost
+numpy
+matplotlib
